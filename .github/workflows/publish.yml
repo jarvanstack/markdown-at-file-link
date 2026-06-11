@@ -1,0 +1,32 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+jobs:
+  marketplace:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Publish to Visual Studio Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish --githubBranch master --pat "$VSCE_PAT"

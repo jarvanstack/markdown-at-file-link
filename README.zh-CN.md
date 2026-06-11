@@ -109,6 +109,12 @@ npx vsce login jarvanstack
 npm run publish
 ```
 
+也可以通过 GitHub Actions 发布：
+
+1. 在仓库里添加名为 `VSCE_PAT` 的 secret。
+2. 打开 `Publish` workflow。
+3. 手动运行，或发布一个 GitHub Release 自动触发。
+
 官方文档：
 
 - https://code.visualstudio.com/api/working-with-extensions/publishing-extension

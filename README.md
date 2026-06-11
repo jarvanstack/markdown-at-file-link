@@ -111,6 +111,12 @@ npx vsce login jarvanstack
 npm run publish
 ```
 
+You can also publish from GitHub Actions:
+
+1. Add a repository secret named `VSCE_PAT`.
+2. Open the `Publish` workflow.
+3. Run it manually, or publish a GitHub Release.
+
 Official docs:
 
 - https://code.visualstudio.com/api/working-with-extensions/publishing-extension
