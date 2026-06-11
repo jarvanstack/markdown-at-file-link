@@ -1,0 +1,112 @@
+{
+  "name": "markdown-at-file-link",
+  "displayName": "Markdown @ File Link",
+  "description": "Type @ in Markdown to search workspace files and insert relative Markdown links.",
+  "version": "0.1.0",
+  "publisher": "jarvanstack",
+  "license": "MIT",
+  "author": "jarvanstack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jarvanstack/markdown-at-file-link.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jarvanstack/markdown-at-file-link/issues"
+  },
+  "homepage": "https://github.com/jarvanstack/markdown-at-file-link#readme",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "markdown",
+    "link",
+    "file",
+    "workspace",
+    "completion",
+    "at-mention"
+  ],
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1F6FEB",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onCommand:markdownAtFileLink.insertFileLink"
+  ],
+  "main": "./extension.js",
+  "scripts": {
+    "lint": "node --check extension.js && node --check scripts/generate-icon.js",
+    "generate:icon": "node scripts/generate-icon.js",
+    "vscode:prepublish": "npm run lint",
+    "package": "vsce package --githubBranch master",
+    "publish": "vsce publish --githubBranch master"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "3.9.2"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "markdownAtFileLink.insertFileLink",
+        "title": "Markdown @ File Link: Insert Workspace File Link"
+      }
+    ],
+    "configuration": {
+      "title": "Markdown @ File Link",
+      "properties": {
+        "markdownAtFileLink.maxFiles": {
+          "type": "number",
+          "default": 20000,
+          "minimum": 100,
+          "description": "Maximum workspace files to index."
+        },
+        "markdownAtFileLink.maxSuggestions": {
+          "type": "number",
+          "default": 200,
+          "minimum": 10,
+          "description": "Maximum completion items shown after @."
+        },
+        "markdownAtFileLink.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/.git/**",
+            "**/.svn/**",
+            "**/.hg/**",
+            "**/node_modules/**",
+            "**/vendor/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/tmp/**",
+            "**/temp/**"
+          ],
+          "description": "Glob patterns excluded from the file index."
+        },
+        "markdownAtFileLink.linkText": {
+          "type": "string",
+          "enum": [
+            "relativePath",
+            "fileName"
+          ],
+          "default": "relativePath",
+          "description": "Text used inside the generated Markdown link."
+        },
+        "markdownAtFileLink.insertStyle": {
+          "type": "string",
+          "enum": [
+            "markdownLink",
+            "plainPath"
+          ],
+          "default": "markdownLink",
+          "description": "Insert a Markdown link or only the relative path."
+        }
+      }
+    }
+  }
+}
