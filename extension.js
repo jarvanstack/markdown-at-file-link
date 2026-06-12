@@ -2,6 +2,23 @@ const path = require('path');
 const vscode = require('vscode');
 
 const CONFIG_SECTION = 'markdownAtFileLink';
+const RECENT_FILES_KEY = 'recentWorkspaceFiles';
+const MAX_RECENT_FILES = 100;
+
+const MATCH_KIND = {
+  EMPTY: 0,
+  FUZZY: 1,
+  SUBSTRING: 2,
+  WORD_PREFIX: 3,
+  PREFIX: 4,
+  EXACT: 5
+};
+
+const EXACTNESS = {
+  NONE: 0,
+  WORD: 1,
+  TARGET: 2
+};
 
 class WorkspaceFileIndex {
   constructor(context) {
@@ -53,8 +70,9 @@ class WorkspaceFileIndex {
 }
 
 class AtFileCompletionProvider {
-  constructor(index) {
+  constructor(index, recentFiles) {
     this.index = index;
+    this.recentFiles = recentFiles;
   }
 
   async provideCompletionItems(document, position) {
@@ -66,7 +84,7 @@ class AtFileCompletionProvider {
     const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
     const limit = config.get('maxSuggestions', 200);
     const files = await this.index.getFiles();
-    const matches = rankFiles(files, match.query, limit);
+    const matches = rankFiles(files, match.query, limit, this.recentFiles);
 
     const items = matches.map((matched, index) => {
       const file = matched.file;
@@ -78,6 +96,11 @@ class AtFileCompletionProvider {
       item.filterText = `@${file.workspacePath} ${file.name}`;
       item.sortText = String(index).padStart(5, '0');
       item.preselect = index === 0;
+      item.command = {
+        command: 'markdownAtFileLink.rememberFile',
+        title: 'Remember File Link',
+        arguments: [file.workspacePath]
+      };
       return item;
     });
 
@@ -85,9 +108,43 @@ class AtFileCompletionProvider {
   }
 }
 
+class RecentFilesStore {
+  constructor(context) {
+    this.state = context.workspaceState;
+    this.paths = normalizeRecentPaths(this.state ? this.state.get(RECENT_FILES_KEY, []) : []);
+  }
+
+  getRank(file) {
+    const key = getRecentKey(file);
+    if (!key) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    const index = this.paths.indexOf(key);
+    return index < 0 ? Number.POSITIVE_INFINITY : index;
+  }
+
+  async remember(file) {
+    const key = getRecentKey(file);
+    if (!key) {
+      return;
+    }
+
+    this.paths = [
+      key,
+      ...this.paths.filter((pathKey) => pathKey !== key)
+    ].slice(0, MAX_RECENT_FILES);
+
+    if (this.state) {
+      await this.state.update(RECENT_FILES_KEY, this.paths);
+    }
+  }
+}
+
 function activate(context) {
   const index = new WorkspaceFileIndex(context);
-  const provider = new AtFileCompletionProvider(index);
+  const recentFiles = new RecentFilesStore(context);
+  const provider = new AtFileCompletionProvider(index, recentFiles);
 
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(
@@ -99,41 +156,86 @@ function activate(context) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('markdownAtFileLink.insertFileLink', async () => {
-      await insertFileLinkFromQuickPick(index);
+      await insertFileLinkFromQuickPick(index, recentFiles);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('markdownAtFileLink.rememberFile', async (workspacePath) => {
+      await recentFiles.remember(workspacePath);
     })
   );
 }
 
 function deactivate() {}
 
-async function insertFileLinkFromQuickPick(index) {
+async function insertFileLinkFromQuickPick(index, recentFiles) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
     return;
   }
 
   const files = await index.getFiles();
-  const picked = await vscode.window.showQuickPick(
-    files.map((file) => ({
-      label: file.name,
-      description: file.workspacePath,
-      file
-    })),
-    {
-      matchOnDescription: true,
-      placeHolder: 'Search workspace file'
-    }
-  );
+  const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+  const limit = config.get('maxSuggestions', 200);
+  const picked = await showRankedFileQuickPick(files, recentFiles, limit);
 
   if (!picked) {
     return;
   }
 
   const text = buildInsertText(editor.document, picked.file);
+  await recentFiles.remember(picked.file);
   await editor.edit((editBuilder) => {
     for (const selection of editor.selections) {
       editBuilder.replace(selection, text);
     }
+  });
+}
+
+function showRankedFileQuickPick(files, recentFiles, limit) {
+  return new Promise((resolve) => {
+    const quickPick = vscode.window.createQuickPick();
+    let settled = false;
+
+    quickPick.placeholder = 'Search workspace file';
+    quickPick.matchOnDescription = true;
+    quickPick.sortByLabel = false;
+
+    const finish = (picked) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      for (const disposable of disposables) {
+        disposable.dispose();
+      }
+      quickPick.dispose();
+      resolve(picked);
+    };
+
+    const updateItems = () => {
+      quickPick.items = rankFiles(files, quickPick.value, limit, recentFiles)
+        .map((matched) => ({
+          label: matched.file.name,
+          description: matched.file.workspacePath,
+          file: matched.file
+        }));
+    };
+
+    const disposables = [
+      quickPick.onDidChangeValue(updateItems),
+      quickPick.onDidAccept(() => {
+        finish(quickPick.selectedItems[0]);
+      }),
+      quickPick.onDidHide(() => {
+        finish(undefined);
+      })
+    ];
+
+    updateItems();
+    quickPick.show();
   });
 }
 
@@ -179,12 +281,12 @@ function getAtMention(document, position) {
   };
 }
 
-function rankFiles(files, query, limit) {
-  const normalizedQuery = normalize(query);
+function rankFiles(files, query, limit, recentFiles) {
+  const normalizedQuery = normalizeQuery(query);
   const ranked = [];
 
   for (const file of files) {
-    const score = scoreFile(file, normalizedQuery);
+    const score = scoreFile(file, normalizedQuery, recentFiles);
     if (score === undefined) {
       continue;
     }
@@ -192,59 +294,170 @@ function rankFiles(files, query, limit) {
   }
 
   return ranked
-    .sort((a, b) => b.score - a.score || a.file.workspacePath.localeCompare(b.file.workspacePath))
+    .sort(compareRankedFiles)
     .slice(0, limit);
 }
 
-function scoreFile(file, query) {
+function scoreFile(file, query, recentFiles) {
+  const recentRank = getRecentRank(recentFiles, file);
+  const recentScore = recentRank === Number.POSITIVE_INFINITY
+    ? 0
+    : MAX_RECENT_FILES - Math.min(recentRank, MAX_RECENT_FILES - 1);
+
   if (!query) {
-    return 1;
+    return {
+      exactness: EXACTNESS.NONE,
+      kind: MATCH_KIND.EMPTY,
+      quality: 0,
+      index: 0,
+      length: file.workspacePath.length,
+      recentScore,
+      recentRank
+    };
   }
 
-  const name = normalize(file.name);
-  const workspacePath = normalize(file.workspacePath);
+  const candidates = buildMatchCandidates(file, query);
 
-  if (name === query) {
-    return 10000 - name.length;
-  }
-  if (workspacePath === query) {
-    return 9500 - workspacePath.length;
-  }
-  if (name.startsWith(query)) {
-    return 9000 - name.length;
-  }
-  if (workspacePath.startsWith(query)) {
-    return 8500 - workspacePath.length;
-  }
-  if (name.includes(query)) {
-    return 7000 - name.indexOf(query);
-  }
-  if (workspacePath.includes(query)) {
-    return 6500 - workspacePath.indexOf(query);
+  if (candidates.length === 0) {
+    return undefined;
   }
 
-  const fuzzy = fuzzyScore(workspacePath, query);
+  const best = candidates.sort(compareMatchScores)[0];
+  return {
+    ...best,
+    recentScore,
+    recentRank
+  };
+}
+
+function compareRankedFiles(a, b) {
+  return compareScores(a.score, b.score)
+    || a.file.workspacePath.localeCompare(b.file.workspacePath);
+}
+
+function compareScores(a, b) {
+  return b.exactness - a.exactness
+    || (b.recentScore || 0) - (a.recentScore || 0)
+    || b.kind - a.kind
+    || b.quality - a.quality
+    || a.index - b.index
+    || a.length - b.length;
+}
+
+function compareMatchScores(a, b) {
+  return compareScores(a, b);
+}
+
+function buildMatchCandidates(file, query) {
+  const candidates = [];
+  const normalizedName = normalize(file.name);
+  const normalizedPath = normalize(file.workspacePath);
+
+  addTextMatchCandidates(candidates, stripExtension(normalizedName), query, 40);
+  addTextMatchCandidates(candidates, normalizedName, query, 35);
+  addTextMatchCandidates(candidates, stripExtension(normalizedPath), query, 20);
+  addTextMatchCandidates(candidates, normalizedPath, query, 15);
+  addWordMatchCandidates(candidates, file.name, query, 45);
+  addWordMatchCandidates(candidates, file.workspacePath, query, 25);
+
+  return candidates;
+}
+
+function addTextMatchCandidates(candidates, value, query, targetQuality) {
+  if (!value) {
+    return;
+  }
+
+  if (value === query) {
+    candidates.push({
+      exactness: EXACTNESS.TARGET,
+      kind: MATCH_KIND.EXACT,
+      quality: targetQuality,
+      index: 0,
+      length: value.length
+    });
+    return;
+  }
+
+  if (value.startsWith(query)) {
+    candidates.push({
+      exactness: EXACTNESS.NONE,
+      kind: MATCH_KIND.PREFIX,
+      quality: targetQuality,
+      index: 0,
+      length: value.length
+    });
+  }
+
+  const index = value.indexOf(query);
+  if (index > 0) {
+    candidates.push({
+      exactness: EXACTNESS.NONE,
+      kind: MATCH_KIND.SUBSTRING,
+      quality: targetQuality,
+      index,
+      length: value.length
+    });
+  }
+
+  const fuzzy = fuzzyScore(value, query);
   if (fuzzy !== undefined) {
-    return fuzzy;
+    candidates.push({
+      exactness: EXACTNESS.NONE,
+      kind: MATCH_KIND.FUZZY,
+      quality: targetQuality + fuzzy.score,
+      index: fuzzy.firstIndex,
+      length: value.length
+    });
   }
+}
 
-  return fuzzyScore(name, query);
+function addWordMatchCandidates(candidates, value, query, targetQuality) {
+  const words = splitSearchWords(value);
+
+  for (const [wordIndex, word] of words.entries()) {
+    if (word === query) {
+      candidates.push({
+        exactness: EXACTNESS.WORD,
+        kind: MATCH_KIND.EXACT,
+        quality: targetQuality,
+        index: wordIndex,
+        length: word.length
+      });
+    } else if (word.startsWith(query)) {
+      candidates.push({
+        exactness: EXACTNESS.NONE,
+        kind: MATCH_KIND.WORD_PREFIX,
+        quality: targetQuality,
+        index: wordIndex,
+        length: word.length
+      });
+    }
+  }
 }
 
 function fuzzyScore(value, query) {
   let searchFrom = 0;
-  let score = 4000;
+  let gapPenalty = 0;
+  let firstIndex = -1;
 
   for (const char of query) {
     const index = value.indexOf(char, searchFrom);
     if (index < 0) {
       return undefined;
     }
-    score -= index - searchFrom;
+
+    if (firstIndex < 0) {
+      firstIndex = index;
+    }
+    gapPenalty += index - searchFrom;
     searchFrom = index + 1;
   }
 
-  return score - value.length;
+  return {
+    score: query.length * 10 - gapPenalty - value.length,
+    firstIndex
+  };
 }
 
 function buildInsertText(document, file) {
@@ -291,12 +504,53 @@ function buildExcludePattern(patterns) {
   return `{${patterns.join(',')}}`;
 }
 
+function normalizeRecentPaths(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item) => typeof item === 'string' && item.length > 0)
+    .slice(0, MAX_RECENT_FILES);
+}
+
+function getRecentKey(file) {
+  if (typeof file === 'string') {
+    return file;
+  }
+  return file && typeof file.workspacePath === 'string' ? file.workspacePath : undefined;
+}
+
+function getRecentRank(recentFiles, file) {
+  if (!recentFiles || typeof recentFiles.getRank !== 'function') {
+    return Number.POSITIVE_INFINITY;
+  }
+  return recentFiles.getRank(file);
+}
+
 function needsFolderPrefix() {
   return Array.isArray(vscode.workspace.workspaceFolders) && vscode.workspace.workspaceFolders.length > 1;
 }
 
+function normalizeQuery(value) {
+  return normalize(String(value || '').trim());
+}
+
 function normalize(value) {
-  return value.toLowerCase();
+  return String(value).toLowerCase();
+}
+
+function stripExtension(value) {
+  const extension = path.extname(value);
+  return extension ? value.slice(0, -extension.length) : value;
+}
+
+function splitSearchWords(value) {
+  return String(value)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
 }
 
 function toPosix(value) {
@@ -305,5 +559,11 @@ function toPosix(value) {
 
 module.exports = {
   activate,
-  deactivate
+  deactivate,
+  __test: {
+    RecentFilesStore,
+    rankFiles,
+    scoreFile,
+    splitSearchWords
+  }
 };

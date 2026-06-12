@@ -1,4 +1,4 @@
-# Markdown @ File Link
+# Markdown File Link
 
 在 Markdown 文件里输入 `@`，搜索当前工作区文件，并插入可点击的相对 Markdown 链接。
 
@@ -10,7 +10,7 @@
 - 支持按文件名或工作区相对路径模糊搜索。
 - 按当前 Markdown 文件位置插入相对链接。
 - 文件名包含空格时，会使用 Markdown angle-bracket link target。
-- 提供命令面板兜底命令：`Markdown @ File Link: Insert Workspace File Link`。
+- 提供命令面板兜底命令：`Markdown File Link: Insert Workspace File Link`。
 - 安装到对应扩展目录后，也可在 Cursor 等 VS Code 兼容编辑器中使用。
 
 ## 使用
@@ -37,7 +37,7 @@
 也可以从命令面板运行：
 
 ```text
-Markdown @ File Link: Insert Workspace File Link
+Markdown File Link: Insert Workspace File Link
 ```
 
 ## 配置
@@ -112,8 +112,10 @@ npm run publish
 也可以通过 GitHub Actions 发布：
 
 1. 在仓库里添加名为 `VSCE_PAT` 的 secret。
-2. 打开 `Publish` workflow。
-3. 手动运行，或发布一个 GitHub Release 自动触发。
+2. 向 `master` 分支推送代码。
+3. `Publish` workflow 会自动递增 patch 版本、发布到 Marketplace，并把发布提交和 tag 推回 `master`。
+
+也可以在 GitHub Actions 页面手动运行该 workflow。
 
 官方文档：
 

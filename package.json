@@ -1,8 +1,8 @@
 {
   "name": "markdown-at-file-link",
-  "displayName": "Markdown @ File Link",
+  "displayName": "Markdown File Link",
   "description": "Type @ in Markdown to search workspace files and insert relative Markdown links.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "jarvanstack",
   "license": "MIT",
   "author": "jarvanstack",
@@ -39,7 +39,8 @@
   ],
   "main": "./extension.js",
   "scripts": {
-    "lint": "node --check extension.js && node --check scripts/generate-icon.js",
+    "lint": "node --check extension.js && node --check scripts/generate-icon.js && node --check scripts/test-ranking.js",
+    "test": "npm run lint && node scripts/test-ranking.js",
     "generate:icon": "node scripts/generate-icon.js",
     "vscode:prepublish": "npm run lint",
     "package": "vsce package --githubBranch master",
@@ -52,11 +53,11 @@
     "commands": [
       {
         "command": "markdownAtFileLink.insertFileLink",
-        "title": "Markdown @ File Link: Insert Workspace File Link"
+        "title": "Markdown File Link: Insert Workspace File Link"
       }
     ],
     "configuration": {
-      "title": "Markdown @ File Link",
+      "title": "Markdown File Link",
       "properties": {
         "markdownAtFileLink.maxFiles": {
           "type": "number",

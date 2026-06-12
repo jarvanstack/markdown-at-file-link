@@ -1,4 +1,4 @@
-# Markdown @ File Link
+# Markdown File Link
 
 Type `@` in a Markdown file, search workspace files, and insert a clickable relative Markdown link.
 
@@ -12,7 +12,7 @@ This extension is intentionally small: it only activates for Markdown files, has
 - Fuzzy search by file name or workspace-relative path.
 - Inserts links relative to the current Markdown file.
 - Handles filenames with spaces by using Markdown angle-bracket link targets.
-- Command Palette fallback: `Markdown @ File Link: Insert Workspace File Link`.
+- Command Palette fallback: `Markdown File Link: Insert Workspace File Link`.
 - Works in VS Code-compatible editors such as Cursor when installed in that editor's extension directory.
 
 ## Usage
@@ -39,7 +39,7 @@ If the completion list does not open automatically, run `Trigger Suggest`:
 You can also run this command from the Command Palette:
 
 ```text
-Markdown @ File Link: Insert Workspace File Link
+Markdown File Link: Insert Workspace File Link
 ```
 
 ## Settings
@@ -114,8 +114,10 @@ npm run publish
 You can also publish from GitHub Actions:
 
 1. Add a repository secret named `VSCE_PAT`.
-2. Open the `Publish` workflow.
-3. Run it manually, or publish a GitHub Release.
+2. Push changes to the `master` branch.
+3. The `Publish` workflow automatically bumps the patch version, publishes to the Marketplace, and pushes the release commit and tag back to `master`.
+
+The workflow can also be run manually from GitHub Actions.
 
 Official docs:
 
