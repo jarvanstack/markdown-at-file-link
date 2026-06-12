@@ -2,7 +2,7 @@
   "name": "markdown-at-file-link",
   "displayName": "Markdown File Link",
   "description": "Type @ in Markdown to search workspace files and insert relative Markdown links.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "jarvanstack",
   "license": "MIT",
   "author": "jarvanstack",
