@@ -109,13 +109,7 @@ npx vsce login jarvanstack
 npm run publish
 ```
 
-也可以通过 GitHub Actions 发布：
-
-1. 在仓库里添加名为 `VSCE_PAT` 的 secret。
-2. 向 `master` 分支推送代码。
-3. `Publish` workflow 会自动递增 patch 版本、发布到 Marketplace，并把发布提交和 tag 推回 `master`。
-
-也可以在 GitHub Actions 页面手动运行该 workflow。
+如果未配置 `VSCE_PAT`，可以先在本地打包，再从 Visual Studio Marketplace publisher 页面上传生成的 `.vsix`。
 
 官方文档：
 

@@ -111,13 +111,7 @@ npx vsce login jarvanstack
 npm run publish
 ```
 
-You can also publish from GitHub Actions:
-
-1. Add a repository secret named `VSCE_PAT`.
-2. Push changes to the `master` branch.
-3. The `Publish` workflow automatically bumps the patch version, publishes to the Marketplace, and pushes the release commit and tag back to `master`.
-
-The workflow can also be run manually from GitHub Actions.
+If `VSCE_PAT` is not configured, package locally and upload the generated `.vsix` from the Visual Studio Marketplace publisher page.
 
 Official docs:
 
